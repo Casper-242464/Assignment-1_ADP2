@@ -1,0 +1,161 @@
+{
+  "info": {
+    "name": "ADP2 Order-Payment APIs",
+    "description": "Postman examples for the order-service and payment-service flows.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "order_base_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "payment_base_url",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "order_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Create Order - Authorized (Paid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"cust-001\",\n  \"item_name\": \"Mechanical Keyboard\",\n  \"amount\": 25000\n}"
+            },
+            "url": {
+              "raw": "{{order_base_url}}/orders",
+              "host": [
+                "{{order_base_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.order && jsonData.order.id) {",
+                  "  pm.collectionVariables.set('order_id', jsonData.order.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Order - Declined (Failed)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"cust-002\",\n  \"item_name\": \"Gaming Laptop\",\n  \"amount\": 150000\n}"
+            },
+            "url": {
+              "raw": "{{order_base_url}}/orders",
+              "host": [
+                "{{order_base_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{order_base_url}}/orders/{{order_id}}/cancel",
+              "host": [
+                "{{order_base_url}}"
+              ],
+              "path": [
+                "orders",
+                "{{order_id}}",
+                "cancel"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Create Payment Directly",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"demo-order-123\",\n  \"amount\": 5000\n}"
+            },
+            "url": {
+              "raw": "{{payment_base_url}}/payments",
+              "host": [
+                "{{payment_base_url}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Payment By Order ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{payment_base_url}}/payments/{{order_id}}",
+              "host": [
+                "{{payment_base_url}}"
+              ],
+              "path": [
+                "payments",
+                "{{order_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
