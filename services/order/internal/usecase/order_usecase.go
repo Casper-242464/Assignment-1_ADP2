@@ -10,12 +10,13 @@ import (
 )
 
 type OrderUsecase struct {
-	repo    domain.OrderRepository
-	payment domain.PaymentGateway
+	repo      domain.OrderRepository
+	payment   domain.PaymentGateway
+	statusHub *OrderStatusHub
 }
 
-func NewOrderUsecase(repo domain.OrderRepository, payment domain.PaymentGateway) *OrderUsecase {
-	return &OrderUsecase{repo: repo, payment: payment}
+func NewOrderUsecase(repo domain.OrderRepository, payment domain.PaymentGateway, statusHub *OrderStatusHub) *OrderUsecase {
+	return &OrderUsecase{repo: repo, payment: payment, statusHub: statusHub}
 }
 
 func (u *OrderUsecase) CreateOrder(ctx context.Context, customerID, itemName string, amount int64) (*domain.Order, error) {
@@ -38,6 +39,9 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, customerID, itemName str
 	if err != nil {
 		_ = u.repo.UpdateStatus(ctx, order.ID, domain.OrderStatusFailed)
 		order.Status = domain.OrderStatusFailed
+		if u.statusHub != nil {
+			u.statusHub.Publish(order.ID, order.Status)
+		}
 		if errors.Is(err, domain.ErrPaymentServiceUnavailable) {
 			return order, domain.ErrPaymentServiceUnavailable
 		}
@@ -51,6 +55,9 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, customerID, itemName str
 	}
 	if err := u.repo.UpdateStatus(ctx, order.ID, order.Status); err != nil {
 		return nil, err
+	}
+	if u.statusHub != nil {
+		u.statusHub.Publish(order.ID, order.Status)
 	}
 
 	return order, nil
