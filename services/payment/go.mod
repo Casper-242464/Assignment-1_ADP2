@@ -9,6 +9,7 @@ require (
 )
 
 require (
+	github.com/Casper-242464/ConvertedProtosRepo v0.0.0-20260411090947-fb52aab6d6a0 // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect
 	github.com/bytedance/sonic/loader v0.1.1 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
