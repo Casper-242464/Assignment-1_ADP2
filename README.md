@@ -2,7 +2,7 @@
 
 This project contains two Go microservices:
 
-- `order-service`: exposes REST endpoints for order operations and uses gRPC to call the payment service.
+- `order-service`: exposes REST endpoints for end users and uses gRPC internally to call the payment service.
 - `payment-service`: exposes a gRPC server for payment processing.
 
 The order service also exposes a gRPC tracking server for order status updates.
@@ -53,9 +53,20 @@ psql -U postgres -d order_db -f services/order/migrations/001_init.sql
 psql -U postgres -d payment_db -f services/payment/migrations/001_init.sql
 ```
 
-### 4. Start the payment service first
+### 4. Configure environment variables
 
-The order service depends on the payment gRPC server at `localhost:50051`.
+Create `.env` files from the provided examples:
+
+```powershell
+Copy-Item services/payment/.env.example services/payment/.env
+Copy-Item services/order/.env.example services/order/.env
+```
+
+The gRPC addresses and ports are loaded from environment variables. They must not be hardcoded in source code.
+
+### 5. Start the payment service first
+
+The order service depends on the payment gRPC server configured in `services/order/.env`.
 
 ```powershell
 cd services/payment
@@ -63,7 +74,7 @@ go mod download
 go run ./cmd/app
 ```
 
-### 5. Start the order service
+### 6. Start the order service
 
 Open a second terminal:
 
@@ -73,9 +84,9 @@ go mod download
 go run ./cmd/app
 ```
 
-### 6. Test the REST API
+### 7. Test the REST API with Postman
 
-The order service exposes these HTTP endpoints:
+The order service exposes these HTTP endpoints for end users:
 
 - `POST /orders`
 - `PATCH /orders/:id/cancel`
@@ -93,6 +104,11 @@ The Postman collection is available here:
 
 - `postman/postman_examples.json`
 
+### 8. Available gRPC APIs
+
+- `payment-service`: unary `ProcessPayment`
+- `order-service`: server-streaming `SubscribeToOrderUpdates`
+
 ## Architecture Diagram
 
 ```mermaid
@@ -103,7 +119,7 @@ flowchart LR
     PGRPC[Payment Service gRPC Server<br/>:50051]
     ODB[(order_db)]
     PDB[(payment_db)]
-    G1[PaymentService.ProcessPayment]
+    G1[PaymentService.ProcessPayment<br/>Unary]
     G2[OrderTracking.SubscribeToOrderUpdates]
 
     C -->|HTTP REST| OHTTP
@@ -124,5 +140,5 @@ flowchart LR
 
 ## Notes
 
-- The current `payment-service` startup code runs a gRPC server, not an HTTP server.
-- Because of that, order creation is the main entry point for payment processing in the current setup.
+- `order-service` keeps the external REST API for end users.
+- gRPC server address and port configuration is loaded from environment variables or `.env` files.
