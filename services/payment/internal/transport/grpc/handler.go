@@ -35,3 +35,22 @@ func (h *Handler) ProcessPayment(ctx context.Context, req *paymentpb.PaymentRequ
 		Status:        payment.Status,
 	}, nil
 }
+
+func (h *Handler) ListPayments(ctx context.Context, req *paymentpb.ListPaymentsRequest) (*paymentpb.ListPaymentResponse, error) {
+	payments, err := h.uc.ListByStatus(ctx, req.GetStatus())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to list payments")
+	}
+
+	var paymentProtos []*paymentpb.PaymentResponse
+	for _, payment := range payments {
+		paymentProtos = append(paymentProtos, &paymentpb.PaymentResponse{
+			TransactionId: payment.TransactionID,
+			Status:        payment.Status,
+		})
+	}
+
+	return &paymentpb.ListPaymentResponse{
+		Payments: paymentProtos,
+	}, nil
+}

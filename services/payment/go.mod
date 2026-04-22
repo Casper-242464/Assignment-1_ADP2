@@ -3,7 +3,7 @@ module payment-service
 go 1.24.0
 
 require (
-	github.com/Casper-242464/ConvertedProtosRepo v0.0.0-20260411090947-fb52aab6d6a0
+	github.com/Casper-242464/ConvertedProtosRepo v0.0.0-20260422133244-84d9da7e9ad6
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/joho/godotenv v1.5.1
