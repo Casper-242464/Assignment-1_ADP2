@@ -50,6 +50,37 @@ func (r *PaymentPostgresRepository) GetByOrderID(ctx context.Context, orderID st
 	return &payment, nil
 }
 
+func (r *PaymentPostgresRepository) ListByStatus(ctx context.Context, status string) ([]*domain.Payment, error) {
+	const q = `
+		SELECT id, order_id, amount, status, COALESCE(transaction_id, '')
+		FROM payments
+		WHERE status = $1
+		ORDER BY creaeted_at DESC`
+
+	var payments []*domain.Payment
+	rows, err := r.db.QueryContext(ctx, q, status)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrPaymentNotFound
+		}
+		return nil, err
+	}
+	for rows.Next() {
+		var payment domain.Payment
+		if err := rows.Scan(
+			&payment.ID,
+			&payment.OrderID,
+			&payment.Amount,
+			&payment.Status,
+			&payment.TransactionID,
+		); err != nil {
+			return nil, err
+		}
+		payments = append(payments, &payment)
+	}
+	return payments, nil
+}
+
 func nullableString(v string) interface{} {
 	if v == "" {
 		return nil

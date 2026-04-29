@@ -1,137 +1,144 @@
-# ADP2 Assignment 1 - Order and Payment Microservices
+# ADP2 Assignment 2 - Switch from REST to gRPC
 
-This repository contains two Go microservices that model a simple checkout flow:
-- `order-service` manages order creation and cancellation.
-- `payment-service` authorizes or declines payments.
+This project contains two Go microservices:
 
-The design follows DDD-inspired bounded contexts with a clean architecture layering style inside each service.
+- `order-service`: exposes REST endpoints for end users and uses gRPC internally to call the payment service.
+- `payment-service`: exposes a gRPC server for payment processing.
 
-## 1) Architecture Decisions
+The order service also exposes a gRPC tracking server for order status updates.
 
-### Service decomposition
-- Split by business capability, not technical layer:
-  - `services/order` owns order lifecycle.
-  - `services/payment` owns payment authorization records.
-- Each service has its own database schema and migration (`migrations/001_init.sql`), which keeps data ownership explicit.
+## Proto Repositories
 
-### Internal layering (per service)
-Each service uses the same package structure:
-- `internal/domain`: Entities, domain errors, and interfaces (ports).
-- `internal/usecase`: Application/business logic.
-- `internal/repository`: Postgres adapters for persistence.
-- `internal/transport/http`: Gin HTTP handlers (and HTTP client adapter in order-service).
-- `cmd/app`: Composition root (wiring dependencies, env config, startup).
+The shared protobuf-generated Go packages used by both services come from:
 
-This creates clear dependency flow:
-- Transport -> Usecase -> Domain interfaces
-- Repository/HTTP clients implement domain interfaces
+- Shared proto repository: https://github.com/Casper-242464/ConvertedProtosRepo
+- Payment proto package: https://github.com/Casper-242464/ConvertedProtosRepo/tree/main/proto/payment
+- Order proto package: https://github.com/Casper-242464/ConvertedProtosRepo/tree/main/proto/order
 
-### Inter-service communication
-- `order-service` synchronously calls `payment-service` over HTTP (`POST /payments`) during order creation.
-- This is a deliberate, simple consistency model for assignment scope.
-- A 2-second HTTP timeout is configured in order-service to avoid hanging requests.
+## Services and Ports
 
-### State model decisions
-- Order states: `Pending`, `Paid`, `Failed`, `Cancelled`.
-- Payment states: `Authorized`, `Declined`.
-- If payment is declined, order is still created but becomes `Failed`.
-- Cancellation is allowed only while order is `Pending`.
+- `order-service` REST API: `http://localhost:8080`
+- `order-service` gRPC tracking server: `localhost:50052`
+- `payment-service` gRPC server: `localhost:50051`
+- PostgreSQL database for orders: `order_db`
+- PostgreSQL database for payments: `payment_db`
 
-## 2) Bounded Contexts
+## How to Run
 
-### Order Context (`services/order`)
-Responsibilities:
-- Accept order requests.
-- Generate order IDs.
-- Persist order records.
-- Orchestrate payment charge.
-- Enforce order state transition rules (e.g., cancellation only when pending).
+### 1. Prerequisites
 
-Core concepts:
-- Aggregate/entity: `Order`
-- Inbound operations:
-  - `POST /orders`
-  - `PATCH /orders/:id/cancel`
-- External dependency (port): `PaymentGateway`
+Make sure these are installed locally:
 
-Order context does not know payment storage internals. It only depends on the payment contract response (`status`, `transaction_id`).
+- Go `1.24`
+- PostgreSQL
 
-### Payment Context (`services/payment`)
-Responsibilities:
-- Accept payment requests tied to an order ID.
-- Apply authorization rule:
-  - Amount > 100000 cents => `Declined`
-  - Otherwise => `Authorized`
-- Persist payment records.
-- Expose lookup by `order_id`.
+### 2. Create the databases
 
-Core concepts:
-- Aggregate/entity: `Payment`
-- Inbound operations:
-  - `POST /payments`
-  - `GET /payments/:order_id`
+Create two PostgreSQL databases:
 
-Payment context is intentionally independent from order storage and only needs `order_id` as a reference.
+- `order_db`
+- `payment_db`
 
-## 3) Failure Handling
+### 3. Run the SQL migrations
 
-### Input validation failures
-- Invalid JSON/missing required fields -> `400 Bad Request`
-- Invalid amount (<= 0) -> `400 Bad Request`
+Apply the migration files:
 
-### Downstream payment service failures (order-service)
-When creating an order:
-- If payment call times out/network fails -> order status is updated to `Failed`, API returns `503 Service Unavailable`.
-- If payment service returns `5xx` -> treated as unavailable (`503`).
-- If payment service returns non-201 non-5xx (e.g., `400`) -> treated as order creation failure (`500`) by current handler mapping.
+- `services/order/migrations/001_init.sql` on `order_db`
+- `services/payment/migrations/001_init.sql` on `payment_db`
 
-### Repository/database failures
-- Unhandled persistence failures bubble up as `500 Internal Server Error`.
-- Not found cases are mapped explicitly:
-  - Order not found -> `404`
-  - Payment not found -> `404`
+Example using `psql`:
 
-### Compensating behavior
-- There is no distributed transaction (no 2PC/Saga orchestrator).
-- Compensation is local and explicit: if payment fails during order creation, order is marked `Failed`.
-- This keeps behavior deterministic while avoiding cross-service DB coupling.
+```powershell
+psql -U postgres -d order_db -f services/order/migrations/001_init.sql
+psql -U postgres -d payment_db -f services/payment/migrations/001_init.sql
+```
 
-## 4) API Summary
+### 4. Configure environment variables
 
-### Order Service (default `http://localhost:8080`)
+Create `.env` files from the provided examples:
+
+```powershell
+Copy-Item services/payment/.env.example services/payment/.env
+Copy-Item services/order/.env.example services/order/.env
+```
+
+The gRPC addresses and ports are loaded from environment variables. They must not be hardcoded in source code.
+
+### 5. Start the payment service first
+
+The order service depends on the payment gRPC server configured in `services/order/.env`.
+
+```powershell
+cd services/payment
+go mod download
+go run ./cmd/app
+```
+
+### 6. Start the order service
+
+Open a second terminal:
+
+```powershell
+cd services/order
+go mod download
+go run ./cmd/app
+```
+
+### 7. Test the REST API with Postman
+
+The order service exposes these HTTP endpoints for end users:
+
 - `POST /orders`
 - `PATCH /orders/:id/cancel`
+- `GET /orders?min_amount=<value>&max_amount=<value>`
 
-### Payment Service (default `http://localhost:8081`)
-- `POST /payments`
-- `GET /payments/:order_id`
+Example request:
 
-## 5) Postman Examples
+```powershell
+curl -X POST http://localhost:8080/orders `
+  -H "Content-Type: application/json" `
+  -d "{\"customer_id\":\"cust-001\",\"item_name\":\"Mechanical Keyboard\",\"amount\":25000}"
+```
 
-An importable Postman collection is provided at:
-- `postman/ADP2-Microservices.postman_collection.json`
+The Postman collection is available here:
 
-### Collection variables
-- `order_base_url` = `http://localhost:8080`
-- `payment_base_url` = `http://localhost:8081`
-- `order_id` (set automatically by test script on create order)
+- `postman/postman_examples.json`
 
-### Example flows included
-1. Create Order (expected `Paid`)
-2. Create Order (expected `Failed` due to payment decline)
-3. Cancel Order by ID
-4. Create Payment directly
-5. Get Payment by order ID
+### 8. Available gRPC APIs
 
-## 6) Run Notes
+- `payment-service`: unary `ProcessPayment`
+- `order-service`: server-streaming `SubscribeToOrderUpdates`
 
-Default environment variables:
-- Order service:
-  - `PORT` (default `8080`)
-  - `ORDER_DB_DSN`
-  - `PAYMENT_SERVICE_URL` (default `http://localhost:8081`)
-- Payment service:
-  - `PORT` (default `8081`)
-  - `PAYMENT_DB_DSN`
+## Architecture Diagram
 
-Start payment service before order service so order creation can call payments successfully.
+```mermaid
+flowchart LR
+    C[Client / Postman]
+    OHTTP[Order Service REST API<br/>:8080]
+    OGRPC[Order Tracking gRPC Server<br/>:50052]
+    PGRPC[Payment Service gRPC Server<br/>:50051]
+    ODB[(order_db)]
+    PDB[(payment_db)]
+    G1[PaymentService.ProcessPayment<br/>Unary]
+    G2[OrderTracking.SubscribeToOrderUpdates]
+
+    C -->|HTTP REST| OHTTP
+    OHTTP -->|SQL| ODB
+    OHTTP -->|gRPC unary| G1
+    G1 --> PGRPC
+    PGRPC -->|SQL| PDB
+    C -.->|gRPC stream| G2
+    G2 --> OGRPC
+```
+
+## Communication Summary
+
+- Client to order service: HTTP/REST
+- Order service to payment service: gRPC unary call
+- Client to order tracking server: gRPC server-streaming call
+- Services to databases: PostgreSQL
+
+## Notes
+
+- `order-service` keeps the external REST API for end users.
+- gRPC server address and port configuration is loaded from environment variables or `.env` files.
