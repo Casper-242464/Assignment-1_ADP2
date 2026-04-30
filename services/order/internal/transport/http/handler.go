@@ -20,9 +20,10 @@ func NewHandler(uc *usecase.OrderUsecase) *Handler {
 }
 
 type createOrderRequest struct {
-	CustomerID string `json:"customer_id" binding:"required"`
-	ItemName   string `json:"item_name" binding:"required"`
-	Amount     int64  `json:"amount" binding:"required"`
+	CustomerID    string `json:"customer_id" binding:"required"`
+	CustomerEmail string `json:"customer_email" binding:"required,email"`
+	ItemName      string `json:"item_name" binding:"required"`
+	Amount        int64  `json:"amount" binding:"required"`
 }
 
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
@@ -38,7 +39,7 @@ func (h *Handler) createOrder(c *gin.Context) {
 		return
 	}
 
-	order, err := h.uc.CreateOrder(c.Request.Context(), req.CustomerID, req.ItemName, req.Amount)
+	order, err := h.uc.CreateOrder(c.Request.Context(), req.CustomerID, req.CustomerEmail, req.ItemName, req.Amount)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrInvalidAmount):

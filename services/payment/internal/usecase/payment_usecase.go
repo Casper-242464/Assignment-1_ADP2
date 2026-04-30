@@ -9,22 +9,24 @@ import (
 )
 
 type PaymentUsecase struct {
-	repo domain.PaymentRepository
+	repo      domain.PaymentRepository
+	publisher domain.PaymentEventPublisher
 }
 
-func NewPaymentUsecase(repo domain.PaymentRepository) *PaymentUsecase {
-	return &PaymentUsecase{repo: repo}
+func NewPaymentUsecase(repo domain.PaymentRepository, publisher domain.PaymentEventPublisher) *PaymentUsecase {
+	return &PaymentUsecase{repo: repo, publisher: publisher}
 }
 
-func (u *PaymentUsecase) CreatePayment(ctx context.Context, orderID string, amount int64) (*domain.Payment, error) {
+func (u *PaymentUsecase) CreatePayment(ctx context.Context, orderID string, amount int64, customerEmail string) (*domain.Payment, error) {
 	if amount <= 0 {
 		return nil, domain.ErrInvalidAmount
 	}
 
 	payment := &domain.Payment{
-		ID:      uuid.NewString(),
-		OrderID: orderID,
-		Amount:  amount,
+		ID:            uuid.NewString(),
+		OrderID:       orderID,
+		CustomerEmail: customerEmail,
+		Amount:        amount,
 	}
 
 	if amount > 100000 {
@@ -36,6 +38,19 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, orderID string, amou
 
 	if err := u.repo.Create(ctx, payment); err != nil {
 		return nil, err
+	}
+
+	if payment.Status == domain.PaymentStatusAuthorized && u.publisher != nil {
+		event := domain.PaymentCompletedEvent{
+			EventID:       payment.ID,
+			OrderID:       payment.OrderID,
+			Amount:        payment.Amount,
+			CustomerEmail: payment.CustomerEmail,
+			Status:        "completed",
+		}
+		if err := u.publisher.PublishPaymentCompleted(ctx, event); err != nil {
+			return nil, err
+		}
 	}
 
 	return payment, nil

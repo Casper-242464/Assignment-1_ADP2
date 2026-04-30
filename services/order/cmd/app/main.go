@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"order-service/internal/repository"
 	grpcTransport "order-service/internal/transport/grpc"
@@ -72,9 +77,27 @@ func main() {
 	handler.RegisterRoutes(r)
 
 	log.Printf("order REST server listening on :%s", httpPort)
-	if err := r.Run(":" + httpPort); err != nil {
-		log.Fatalf("run server: %v", err)
+	httpServer := &http.Server{
+		Addr:    ":" + httpPort,
+		Handler: r,
 	}
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("run server: %v", err)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+	log.Println("shutting down order service")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := httpServer.Shutdown(ctx); err != nil {
+		log.Printf("shutdown REST server: %v", err)
+	}
+	server.GracefulStop()
 }
 
 func loadDotEnv() {

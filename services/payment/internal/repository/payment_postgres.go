@@ -55,7 +55,7 @@ func (r *PaymentPostgresRepository) ListByStatus(ctx context.Context, status str
 		SELECT id, order_id, amount, status, COALESCE(transaction_id, '')
 		FROM payments
 		WHERE status = $1
-		ORDER BY creaeted_at DESC`
+		ORDER BY created_at DESC`
 
 	var payments []*domain.Payment
 	rows, err := r.db.QueryContext(ctx, q, status)

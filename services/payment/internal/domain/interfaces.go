@@ -15,3 +15,8 @@ type PaymentRepository interface {
 	GetByOrderID(ctx context.Context, orderID string) (*Payment, error)
 	ListByStatus(ctx context.Context, status string) ([]*Payment, error)
 }
+
+type PaymentEventPublisher interface {
+	PublishPaymentCompleted(ctx context.Context, event PaymentCompletedEvent) error
+	Close() error
+}
