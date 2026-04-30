@@ -44,3 +44,7 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, orderID string, amou
 func (u *PaymentUsecase) GetByOrderID(ctx context.Context, orderID string) (*domain.Payment, error) {
 	return u.repo.GetByOrderID(ctx, orderID)
 }
+
+func (u *PaymentUsecase) ListByStatus(ctx context.Context, status string) ([]*domain.Payment, error) {
+	return u.repo.ListByStatus(ctx, status)
+}

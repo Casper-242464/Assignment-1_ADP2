@@ -3,21 +3,31 @@ package main
 import (
 	"database/sql"
 	"log"
-	"net/http"
-	"time"
+	"net"
+	"os"
 
 	"order-service/internal/repository"
+	grpcTransport "order-service/internal/transport/grpc"
 	httptransport "order-service/internal/transport/http"
 	"order-service/internal/usecase"
 
+	orderpb "github.com/Casper-242464/ConvertedProtosRepo/proto/order"
 	"github.com/gin-gonic/gin"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/joho/godotenv"
+	grpcLib "google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
-	dsn := "postgres://postgres:postgres@localhost:5432/order_db?sslmode=disable"
-	paymentURL := "http://localhost:8081"
-	port := "8080"
+	loadDotEnv()
+
+	dsn := envOrDefault("ORDER_DB_DSN", "postgres://postgres:postgres@localhost:5432/order_db?sslmode=disable")
+	httpPort := envOrDefault("ORDER_HTTP_PORT", "8080")
+	orderGRPCAddress := requireEnv("ORDER_GRPC_ADDRESS")
+	orderGRPCPort := requireEnv("ORDER_GRPC_PORT")
+	paymentGRPCAddress := requireEnv("PAYMENT_GRPC_ADDRESS")
+	paymentGRPCPort := requireEnv("PAYMENT_GRPC_PORT")
 
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -30,14 +40,61 @@ func main() {
 	}
 
 	orderRepo := repository.NewOrderPostgresRepository(db)
-	paymentClient := httptransport.NewPaymentClient(paymentURL, &http.Client{Timeout: 2 * time.Second})
-	orderUC := usecase.NewOrderUsecase(orderRepo, paymentClient)
+
+	paymentTarget := net.JoinHostPort(paymentGRPCAddress, paymentGRPCPort)
+	conn, err := grpcLib.Dial(paymentTarget, grpcLib.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("dial payment grpc: %v", err)
+	}
+	defer conn.Close()
+
+	paymentClient := grpcTransport.NewPaymentClient(conn)
+	statusHub := usecase.NewOrderStatusHub()
+	orderUC := usecase.NewOrderUsecase(orderRepo, paymentClient, statusHub)
 	handler := httptransport.NewHandler(orderUC)
+
+	listener, err := net.Listen("tcp", net.JoinHostPort(orderGRPCAddress, orderGRPCPort))
+	if err != nil {
+		log.Fatalf("listen grpc: %v", err)
+	}
+
+	server := grpcLib.NewServer()
+	orderpb.RegisterOrderTrackingServer(server, grpcTransport.NewOrderTrackingServer(statusHub))
+
+	go func() {
+		log.Printf("order gRPC tracking server listening on %s", listener.Addr().String())
+		if err := server.Serve(listener); err != nil {
+			log.Fatalf("serve grpc: %v", err)
+		}
+	}()
 
 	r := gin.Default()
 	handler.RegisterRoutes(r)
 
-	if err := r.Run(":" + port); err != nil {
+	log.Printf("order REST server listening on :%s", httpPort)
+	if err := r.Run(":" + httpPort); err != nil {
 		log.Fatalf("run server: %v", err)
 	}
+}
+
+func loadDotEnv() {
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		log.Fatalf("load .env: %v", err)
+	}
+}
+
+func requireEnv(key string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		log.Fatalf("%s is required", key)
+	}
+	return value
+}
+
+func envOrDefault(key, fallback string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	return value
 }

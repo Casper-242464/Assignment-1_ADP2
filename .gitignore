@@ -1,3 +1,7 @@
 ADP2_Assignment1.zip
-services/order/.env
-services/payment/.env
+Assignment2.zip
+.env
+**/.env
+**/.gocache/
+.idea/
+.git/

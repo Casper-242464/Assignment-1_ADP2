@@ -1,17 +1,13 @@
 {
   "info": {
-    "name": "ADP2 Order-Payment APIs",
-    "description": "Postman examples for the order-service and payment-service flows.",
+    "name": "ADP2 Order REST API",
+    "description": "Postman examples for the order-service REST API. The order service calls the payment service over gRPC internally.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "order_base_url",
       "value": "http://localhost:8080"
-    },
-    {
-      "key": "payment_base_url",
-      "value": "http://localhost:8081"
     },
     {
       "key": "order_id",
@@ -104,53 +100,6 @@
                 "orders",
                 "{{order_id}}",
                 "cancel"
-              ]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Payments",
-      "item": [
-        {
-          "name": "Create Payment Directly",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"order_id\": \"demo-order-123\",\n  \"amount\": 5000\n}"
-            },
-            "url": {
-              "raw": "{{payment_base_url}}/payments",
-              "host": [
-                "{{payment_base_url}}"
-              ],
-              "path": [
-                "payments"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Get Payment By Order ID",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{payment_base_url}}/payments/{{order_id}}",
-              "host": [
-                "{{payment_base_url}}"
-              ],
-              "path": [
-                "payments",
-                "{{order_id}}"
               ]
             }
           }
