@@ -6,8 +6,6 @@ This project contains three Go microservices:
 - `payment-service`: processes payments and publishes `payment.completed` events to RabbitMQ after successful payments.
 - `notification-service`: consumes payment events from RabbitMQ and simulates sending an email by logging the notification.
 
-The bonus Dead Letter Queue task is intentionally not included.
-
 ## Event Flow
 
 ```mermaid
