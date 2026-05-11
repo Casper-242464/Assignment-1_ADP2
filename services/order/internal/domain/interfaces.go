@@ -19,6 +19,12 @@ type OrderRepository interface {
 	FilteredList(ctx context.Context, minAmount int64, maxAmount int64) ([]*Order, error)
 }
 
+type OrderCache interface {
+	Get(ctx context.Context, id string) (*Order, error)
+	Set(ctx context.Context, order *Order) error
+	Delete(ctx context.Context, id string) error
+}
+
 type PaymentGateway interface {
 	Charge(ctx context.Context, orderID string, amount int64, customerEmail string) (*PaymentResult, error)
 }

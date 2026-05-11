@@ -43,6 +43,7 @@ func (u *PaymentUsecase) CreatePayment(ctx context.Context, orderID string, amou
 	if payment.Status == domain.PaymentStatusAuthorized && u.publisher != nil {
 		event := domain.PaymentCompletedEvent{
 			EventID:       payment.ID,
+			PaymentID:     payment.ID,
 			OrderID:       payment.OrderID,
 			Amount:        payment.Amount,
 			CustomerEmail: payment.CustomerEmail,

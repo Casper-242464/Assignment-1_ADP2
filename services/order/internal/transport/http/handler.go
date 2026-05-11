@@ -28,6 +28,7 @@ type createOrderRequest struct {
 
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.POST("/orders", h.createOrder)
+	r.GET("/orders/:id", h.getOrder)
 	r.PATCH("/orders/:id/cancel", h.cancelOrder)
 	r.GET("/orders", h.getFilteredList)
 }
@@ -53,6 +54,27 @@ func (h *Handler) createOrder(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"order": order})
+}
+
+func (h *Handler) getOrder(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	order, err := h.uc.GetOrder(c.Request.Context(), id)
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrOrderNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve order"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"order": order})
 }
 
 func (h *Handler) cancelOrder(c *gin.Context) {

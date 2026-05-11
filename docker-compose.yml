@@ -37,7 +37,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
-    container_name: assignment3-rabbitmq
+    container_name: assignment4-rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -45,6 +45,19 @@ services:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: assignment4-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -78,6 +91,8 @@ services:
       ORDER_GRPC_PORT: 50052
       PAYMENT_GRPC_ADDRESS: payment-service
       PAYMENT_GRPC_PORT: 50051
+      REDIS_ADDR: redis:6379
+      ORDER_CACHE_TTL: 5m
     ports:
       - "8080:8080"
       - "50052:50052"
@@ -86,6 +101,8 @@ services:
         condition: service_healthy
       payment-service:
         condition: service_started
+      redis:
+        condition: service_healthy
 
   notification-service:
     build:
@@ -94,11 +111,21 @@ services:
     environment:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       PAYMENT_COMPLETED_QUEUE: payment.completed
+      REDIS_ADDR: redis:6379
+      PROVIDER_MODE: SIMULATED
+      SIMULATED_PROVIDER_LATENCY: 750ms
+      SIMULATED_PROVIDER_FAILURE_RATE: 0.3
+      NOTIFICATION_MAX_RETRIES: 3
+      NOTIFICATION_INITIAL_BACKOFF: 2s
+      NOTIFICATION_IDEMPOTENCY_TTL: 24h
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
 volumes:
   order-db-data:
   payment-db-data:
   rabbitmq-data:
+  redis-data:

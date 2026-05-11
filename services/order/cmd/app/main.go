@@ -20,6 +20,7 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 	grpcLib "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -33,6 +34,8 @@ func main() {
 	orderGRPCPort := requireEnv("ORDER_GRPC_PORT")
 	paymentGRPCAddress := requireEnv("PAYMENT_GRPC_ADDRESS")
 	paymentGRPCPort := requireEnv("PAYMENT_GRPC_PORT")
+	redisAddress := envOrDefault("REDIS_ADDR", "localhost:6379")
+	cacheTTL := envDurationOrDefault("ORDER_CACHE_TTL", 5*time.Minute)
 
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -45,6 +48,12 @@ func main() {
 	}
 
 	orderRepo := repository.NewOrderPostgresRepository(db)
+	redisClient := redis.NewClient(&redis.Options{Addr: redisAddress})
+	defer redisClient.Close()
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		log.Fatalf("ping redis: %v", err)
+	}
+	orderCache := repository.NewOrderRedisCache(redisClient, cacheTTL)
 
 	paymentTarget := net.JoinHostPort(paymentGRPCAddress, paymentGRPCPort)
 	conn, err := grpcLib.Dial(paymentTarget, grpcLib.WithTransportCredentials(insecure.NewCredentials()))
@@ -55,7 +64,7 @@ func main() {
 
 	paymentClient := grpcTransport.NewPaymentClient(conn)
 	statusHub := usecase.NewOrderStatusHub()
-	orderUC := usecase.NewOrderUsecase(orderRepo, paymentClient, statusHub)
+	orderUC := usecase.NewOrderUsecase(orderRepo, orderCache, paymentClient, statusHub)
 	handler := httptransport.NewHandler(orderUC)
 
 	listener, err := net.Listen("tcp", net.JoinHostPort(orderGRPCAddress, orderGRPCPort))
@@ -120,4 +129,16 @@ func envOrDefault(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func envDurationOrDefault(key string, fallback time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		log.Fatalf("%s must be a valid duration: %v", key, err)
+	}
+	return duration
 }
