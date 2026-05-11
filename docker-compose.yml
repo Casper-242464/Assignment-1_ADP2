@@ -1,0 +1,104 @@
+services:
+  order-db:
+    image: postgres:16-alpine
+    container_name: assignment3-order-db
+    environment:
+      POSTGRES_DB: order_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - order-db-data:/var/lib/postgresql/data
+      - ./services/order/migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d order_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  payment-db:
+    image: postgres:16-alpine
+    container_name: assignment3-payment-db
+    environment:
+      POSTGRES_DB: payment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - payment-db-data:/var/lib/postgresql/data
+      - ./services/payment/migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d payment_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: assignment3-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  payment-service:
+    build:
+      context: ./services/payment
+    container_name: assignment3-payment-service
+    environment:
+      PAYMENT_DB_DSN: postgres://postgres:postgres@payment-db:5432/payment_db?sslmode=disable
+      PAYMENT_GRPC_ADDRESS: 0.0.0.0
+      PAYMENT_GRPC_PORT: 50051
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      PAYMENT_COMPLETED_QUEUE: payment.completed
+    ports:
+      - "50051:50051"
+    depends_on:
+      payment-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  order-service:
+    build:
+      context: ./services/order
+    container_name: assignment3-order-service
+    environment:
+      ORDER_DB_DSN: postgres://postgres:postgres@order-db:5432/order_db?sslmode=disable
+      ORDER_HTTP_PORT: 8080
+      ORDER_GRPC_ADDRESS: 0.0.0.0
+      ORDER_GRPC_PORT: 50052
+      PAYMENT_GRPC_ADDRESS: payment-service
+      PAYMENT_GRPC_PORT: 50051
+    ports:
+      - "8080:8080"
+      - "50052:50052"
+    depends_on:
+      order-db:
+        condition: service_healthy
+      payment-service:
+        condition: service_started
+
+  notification-service:
+    build:
+      context: ./services/notification
+    container_name: assignment3-notification-service
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      PAYMENT_COMPLETED_QUEUE: payment.completed
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  order-db-data:
+  payment-db-data:
+  rabbitmq-data:

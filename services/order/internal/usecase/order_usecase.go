@@ -19,23 +19,24 @@ func NewOrderUsecase(repo domain.OrderRepository, payment domain.PaymentGateway,
 	return &OrderUsecase{repo: repo, payment: payment, statusHub: statusHub}
 }
 
-func (u *OrderUsecase) CreateOrder(ctx context.Context, customerID, itemName string, amount int64) (*domain.Order, error) {
+func (u *OrderUsecase) CreateOrder(ctx context.Context, customerID, customerEmail, itemName string, amount int64) (*domain.Order, error) {
 	if amount <= 0 {
 		return nil, domain.ErrInvalidAmount
 	}
 
 	order := &domain.Order{
-		ID:         uuid.NewString(),
-		CustomerID: customerID,
-		ItemName:   itemName,
-		Amount:     amount,
-		Status:     domain.OrderStatusPending,
+		ID:            uuid.NewString(),
+		CustomerID:    customerID,
+		CustomerEmail: customerEmail,
+		ItemName:      itemName,
+		Amount:        amount,
+		Status:        domain.OrderStatusPending,
 	}
 	if err := u.repo.Create(ctx, order); err != nil {
 		return nil, err
 	}
 
-	result, err := u.payment.Charge(ctx, order.ID, order.Amount)
+	result, err := u.payment.Charge(ctx, order.ID, order.Amount, order.CustomerEmail)
 	if err != nil {
 		_ = u.repo.UpdateStatus(ctx, order.ID, domain.OrderStatusFailed)
 		order.Status = domain.OrderStatusFailed

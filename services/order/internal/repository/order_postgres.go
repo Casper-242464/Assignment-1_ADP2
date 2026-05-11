@@ -18,21 +18,21 @@ func NewOrderPostgresRepository(db *sql.DB) *OrderPostgresRepository {
 
 func (r *OrderPostgresRepository) Create(ctx context.Context, order *domain.Order) error {
 	const q = `
-		INSERT INTO orders (id, customer_id, item_name, amount, status)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO orders (id, customer_id, customer_email, item_name, amount, status)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING created_at`
 
-	return r.db.QueryRowContext(ctx, q, order.ID, order.CustomerID, order.ItemName, order.Amount, order.Status).Scan(&order.CreatedAt)
+	return r.db.QueryRowContext(ctx, q, order.ID, order.CustomerID, order.CustomerEmail, order.ItemName, order.Amount, order.Status).Scan(&order.CreatedAt)
 }
 
 func (r *OrderPostgresRepository) GetByID(ctx context.Context, id string) (*domain.Order, error) {
 	const q = `
-		SELECT id, customer_id, item_name, amount, status, created_at
+		SELECT id, customer_id, customer_email, item_name, amount, status, created_at
 		FROM orders
 		WHERE id = $1`
 
 	var order domain.Order
-	err := r.db.QueryRowContext(ctx, q, id).Scan(&order.ID, &order.CustomerID, &order.ItemName, &order.Amount, &order.Status, &order.CreatedAt)
+	err := r.db.QueryRowContext(ctx, q, id).Scan(&order.ID, &order.CustomerID, &order.CustomerEmail, &order.ItemName, &order.Amount, &order.Status, &order.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrOrderNotFound
@@ -64,7 +64,7 @@ func (r *OrderPostgresRepository) UpdateStatus(ctx context.Context, id string, s
 
 func (r *OrderPostgresRepository) FilteredList(ctx context.Context, minAmount int64, maxAmount int64) ([]*domain.Order, error) {
 	const q = `
-		SELECT id, customer_id, item_name, amount, status, created_at
+		SELECT id, customer_id, customer_email, item_name, amount, status, created_at
 		FROM orders
 		WHERE amount BETWEEN $1 AND $2;`
 
@@ -77,7 +77,7 @@ func (r *OrderPostgresRepository) FilteredList(ctx context.Context, minAmount in
 	var orders []*domain.Order
 	for rows.Next() {
 		var order domain.Order
-		if err := rows.Scan(&order.ID, &order.CustomerID, &order.ItemName, &order.Amount, &order.Status, &order.CreatedAt); err != nil {
+		if err := rows.Scan(&order.ID, &order.CustomerID, &order.CustomerEmail, &order.ItemName, &order.Amount, &order.Status, &order.CreatedAt); err != nil {
 			return nil, err
 		}
 		orders = append(orders, &order)

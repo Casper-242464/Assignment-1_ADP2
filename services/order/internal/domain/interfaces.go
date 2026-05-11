@@ -20,5 +20,5 @@ type OrderRepository interface {
 }
 
 type PaymentGateway interface {
-	Charge(ctx context.Context, orderID string, amount int64) (*PaymentResult, error)
+	Charge(ctx context.Context, orderID string, amount int64, customerEmail string) (*PaymentResult, error)
 }
