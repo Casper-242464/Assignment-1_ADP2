@@ -130,6 +130,30 @@ Read the order through the cached endpoint:
 curl http://localhost:8080/orders/<order-id>
 ```
 
+Check for parallel message execution
+
+```powershell
+1..10 | ForEach-Object {
+    $i = $_
+    Start-Job -ScriptBlock {
+        param($id)
+        $body = @{
+            customer_id    = "cust-$id"
+            customer_email = "user$id@example.com"
+            item_name      = "Buldak"
+            amount         = 500
+        } | ConvertTo-Json
+
+        Invoke-RestMethod -Uri "http://localhost:8080/orders" `
+                          -Method Post `
+                          -Body $body `
+                          -ContentType "application/json"
+    } -ArgumentList $i
+}
+
+Get-Job | Wait-Job | Receive-Job
+```
+
 ### 6. View service logs
 
 In another terminal:

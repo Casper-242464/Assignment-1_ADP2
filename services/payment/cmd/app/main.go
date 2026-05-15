@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -30,6 +31,8 @@ func main() {
 	grpcPort := requireEnv("PAYMENT_GRPC_PORT")
 	rabbitURL := envOrDefault("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 	paymentCompletedQueue := envOrDefault("PAYMENT_COMPLETED_QUEUE", "payment.completed")
+	rabbitPoolSizeStr := envOrDefault("RABBITMQ_POOL_SIZE", "10")
+	rabbitPoolSize, _ := strconv.Atoi(rabbitPoolSizeStr)
 
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -41,7 +44,7 @@ func main() {
 		log.Fatalf("ping db: %v", err)
 	}
 
-	publisher, err := messaging.NewRabbitMQPublisher(rabbitURL, paymentCompletedQueue)
+	publisher, err := messaging.NewRabbitMQPublisher(rabbitURL, paymentCompletedQueue, rabbitPoolSize)
 	if err != nil {
 		log.Fatalf("connect rabbitmq: %v", err)
 	}
